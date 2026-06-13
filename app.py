@@ -229,7 +229,7 @@ if uploaded_file is not None:
     pdf_bytes = uploaded_file.read()
     
     st.markdown("### 🛠️ Summarization Settings")
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     
     with col1:
         summary_mode = st.selectbox(
@@ -244,6 +244,8 @@ if uploaded_file is not None:
         )
     with col2:
         num_keywords = st.slider("Number of Keywords", 5, 25, 15)
+    with col3:
+        num_questions = st.slider("Number of Quiz Questions", 0, 50, 5, help="Select 0 to disable quiz generation. High counts (e.g. 50) may increase processing time.")
         
     # Process file button
     if st.button("✨ Process and Analyze Document"):
@@ -334,7 +336,8 @@ if uploaded_file is not None:
                             full_text,
                             provider=provider,
                             api_key=api_key,
-                            model_name=model_name
+                            model_name=model_name,
+                            num_questions=num_questions
                         )
                         st.session_state["quiz"] = quiz
                     except Exception:
@@ -522,7 +525,10 @@ if uploaded_file is not None:
                         st.session_state["quiz_answers"] = {}
                         st.rerun()
             else:
-                st.info("Quiz questions not generated.")
+                if num_questions == 0:
+                    st.info("Quiz is disabled. Set 'Number of Quiz Questions' to a value greater than 0 in the settings to generate a practice quiz.")
+                else:
+                    st.info("Quiz questions not generated. Verify API credentials or check settings.")
                 
         # TAB 5: RAW TEXT
         with tab_raw:

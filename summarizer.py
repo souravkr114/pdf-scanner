@@ -251,14 +251,17 @@ def generate_flashcards(text, provider, api_key, model_name=None):
             {"front": "Flashcard generation error", "back": "Could not parse JSON. Check API logs."}
         ]
 
-def generate_quiz(text, provider, api_key, model_name=None):
+def generate_quiz(text, provider, api_key, model_name=None, num_questions=5):
     """
     Generates a multiple choice quiz based on the document.
     """
+    if num_questions <= 0:
+        return []
+        
     sample_text = text[:80000]
     
     system_prompt = (
-        "You are an educational designer. Generate exactly 5 multiple choice questions (MCQs) to test comprehension of the text. "
+        f"You are an educational designer. Generate exactly {num_questions} unique multiple choice questions (MCQs) to test comprehension of the text. "
         "For each question, provide 4 options (A, B, C, D), the correct option letter, and a brief explanation of why it is correct. "
         "Return the result as a JSON object in this format:\n"
         "{\n"
