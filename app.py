@@ -1,7 +1,7 @@
 import streamlit as st
 import os
 from pdf_processor import process_pdf
-from summarizer import generate_summary, generate_keywords, generate_flashcards, generate_quiz, extract_text_multimodal, DEFAULT_MODELS
+from summarizer import generate_summary, generate_keywords, generate_flashcards, generate_quiz, extract_text_multimodal, generate_all_insights, DEFAULT_MODELS
 from fpdf import FPDF
 import io
 
@@ -323,60 +323,28 @@ if uploaded_file is not None:
                     st.session_state["analysis_ready"] = False
                     
             if st.session_state.get("analysis_ready", False):
-                # Run LLM Summary & Keywords
-                with st.spinner("Step 2: Generating summary with AI..."):
+                with st.spinner("Analyzing document and generating insights (Summary, Keywords, Quiz, Cards)..."):
                     try:
-                        summary = generate_summary(
+                        insights = generate_all_insights(
                             full_text,
                             provider=provider,
                             api_key=api_key,
                             mode=summary_mode[1],
-                            model_name=model_name
-                        )
-                        st.session_state["summary"] = summary
-                    except Exception as e:
-                        st.error(f"Summarizer failed: {str(e)}")
-                        st.session_state["summary"] = None
-                        
-                with st.spinner("Step 3: Extracting keywords..."):
-                    try:
-                        keywords = generate_keywords(
-                            full_text,
-                            provider=provider,
-                            api_key=api_key,
                             model_name=model_name,
-                            num_keywords=num_keywords
-                        )
-                        st.session_state["keywords"] = keywords
-                    except Exception:
-                        st.session_state["keywords"] = []
-                        
-                with st.spinner("Step 4: Creating interactive flashcards..."):
-                    try:
-                        flashcards = generate_flashcards(
-                            full_text,
-                            provider=provider,
-                            api_key=api_key,
-                            model_name=model_name
-                        )
-                        st.session_state["flashcards"] = flashcards
-                    except Exception:
-                        st.session_state["flashcards"] = []
-                        
-                with st.spinner("Step 5: Formulating Practice MCQ Quiz..."):
-                    try:
-                        quiz = generate_quiz(
-                            full_text,
-                            provider=provider,
-                            api_key=api_key,
-                            model_name=model_name,
+                            num_keywords=num_keywords,
                             num_questions=num_questions
                         )
-                        st.session_state["quiz"] = quiz
-                    except Exception:
+                        st.session_state["summary"] = insights["summary"]
+                        st.session_state["keywords"] = insights["keywords"]
+                        st.session_state["flashcards"] = insights["flashcards"]
+                        st.session_state["quiz"] = insights["quiz"]
+                        st.success("🎉 Analysis complete! View results below.")
+                    except Exception as e:
+                        st.error(f"Analysis failed: {str(e)}")
+                        st.session_state["summary"] = None
+                        st.session_state["keywords"] = []
+                        st.session_state["flashcards"] = []
                         st.session_state["quiz"] = []
-                        
-                st.success("🎉 Analysis complete! View results below.")
 
     # -----------------------------------------------------------------------------
     # DISPLAY RESULTS

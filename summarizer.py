@@ -327,3 +327,59 @@ def extract_text_multimodal(pdf_bytes, provider, api_key, model_name=None):
         ]
     )
     return response.text
+
+def generate_all_insights(text, provider, api_key, mode="research_paper", model_name=None, num_keywords=15, num_questions=5):
+    """
+    Generates all insights (Summary, Keywords, Flashcards, Quiz) in a SINGLE API call.
+    This reduces API calls from 5 to 1, avoiding 429 rate limit errors and accelerating processing.
+    """
+    # Use first 80,000 characters for context (fits key details of most papers easily)
+    sample_text = text[:80000]
+    
+    mode_instructions = get_system_prompt_for_mode(mode)
+    
+    system_prompt = (
+        "You are an academic analysis assistant. Analyze the provided text and output a JSON object containing "
+        "a summary, key terms, study flashcards, and a practice quiz.\n\n"
+        "Your output must be a valid JSON object matching exactly this schema:\n"
+        "{\n"
+        "  \"summary\": \"Detailed markdown summary formatted according to the instructions.\",\n"
+        f"  \"keywords\": [exactly {num_keywords} important keywords/phrases from the text],\n"
+        "  \"flashcards\": [\n"
+        "    {\"front\": \"active recall question/concept/term\", \"back\": \"concise definition/explanation\"}\n"
+        "    ... (exactly 10 flashcards)\n"
+        "  ],\n"
+        "  \"quiz\": [\n"
+        "    {\n"
+        "      \"question\": \"multiple choice question text\",\n"
+        "      \"options\": {\"A\": \"option A\", \"B\": \"option B\", \"C\": \"option C\", \"D\": \"option D\"},\n"
+        "      \"answer\": \"A\",\n"
+        "      \"explanation\": \"brief explanation of the correct answer\"\n"
+        "    }\n"
+        f"    ... (exactly {num_questions} questions, or empty list if {num_questions} is 0)\n"
+        "  ]\n"
+        "}\n\n"
+        f"Summary Format Instructions:\n{mode_instructions}\n\n"
+        "Return ONLY the valid JSON object, no wrapping markdown, no extra text."
+    )
+    
+    user_prompt = f"Document content:\n\n{sample_text}"
+    
+    response = call_llm(provider, api_key, system_prompt, user_prompt, model_name, json_mode=True)
+    
+    # Parse JSON
+    try:
+        json_match = re.search(r'\{.*\}', response, re.DOTALL)
+        if json_match:
+            data = json.loads(json_match.group(0))
+        else:
+            data = json.loads(response)
+        
+        return {
+            "summary": data.get("summary", "Summary generation failed."),
+            "keywords": data.get("keywords", []),
+            "flashcards": data.get("flashcards", []),
+            "quiz": data.get("quiz", [])
+        }
+    except Exception as e:
+        raise ValueError(f"Failed to parse structured insights from AI response: {str(e)}\nResponse: {response}")
