@@ -1,7 +1,7 @@
 import streamlit as st
 import os
 from pdf_processor import process_pdf
-from summarizer import generate_summary, generate_keywords, generate_flashcards, generate_quiz, DEFAULT_MODELS
+from summarizer import generate_summary, generate_keywords, generate_flashcards, generate_quiz, extract_text_multimodal, DEFAULT_MODELS
 from fpdf import FPDF
 import io
 
@@ -254,23 +254,55 @@ if uploaded_file is not None:
         else:
             with st.spinner("Step 1: Reading and extracting text from PDF..."):
                 try:
-                    extracted_pages, ocr_used = process_pdf(
-                        pdf_bytes,
-                        force_ocr=use_ocr,
-                        tesseract_cmd=tesseract_path,
-                        poppler_path=poppler_path
-                    )
+                    # Get page count using PyMuPDF (natively)
+                    import fitz
+                    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+                    total_pages = doc.page_count
+                    doc.close()
                     
-                    full_text = "\n\n".join([page["text"] for page in extracted_pages])
-                    total_pages = len(extracted_pages)
+                    ocr_used = False
+                    full_text = ""
+                    
+                    # If Gemini and OCR is forced, run Gemini Multimodal OCR directly
+                    if provider == "Gemini" and use_ocr:
+                        st.info("Running Gemini Native Multimodal OCR...")
+                        full_text = extract_text_multimodal(
+                            pdf_bytes,
+                            provider=provider,
+                            api_key=api_key,
+                            model_name=model_name
+                        )
+                        ocr_used = True
+                    else:
+                        # Try direct extraction first
+                        extracted_pages, local_ocr = process_pdf(
+                            pdf_bytes,
+                            force_ocr=use_ocr,
+                            tesseract_cmd=tesseract_path,
+                            poppler_path=poppler_path
+                        )
+                        full_text = "\n\n".join([page["text"] for page in extracted_pages])
+                        ocr_used = local_ocr
+                        
+                        # If direct extraction yielded very little text and we are using Gemini, fallback to Gemini OCR
+                        if len(full_text.strip()) < 100 and not local_ocr:
+                            if provider == "Gemini":
+                                st.info("Scanned/Handwritten PDF detected. Running Gemini Native Multimodal OCR...")
+                                full_text = extract_text_multimodal(
+                                    pdf_bytes,
+                                    provider=provider,
+                                    api_key=api_key,
+                                    model_name=model_name
+                                )
+                                ocr_used = True
+                            else:
+                                st.warning(
+                                    "We extracted very little text from this PDF. "
+                                    "It might be a scanned document or image. Please try toggling 'Force OCR (Scanned PDF)' in the sidebar."
+                                )
+                    
                     total_chars = len(full_text)
                     
-                    if total_chars < 50:
-                        st.warning(
-                            "We extracted very little text from this PDF. "
-                            "It might be a scanned document or image. Please try toggling 'Force OCR (Scanned PDF)' in the sidebar."
-                        )
-                        
                     # Save state
                     st.session_state["full_text"] = full_text
                     st.session_state["total_pages"] = total_pages
@@ -286,7 +318,8 @@ if uploaded_file is not None:
                     
                 except Exception as e:
                     st.error(f"Error during text extraction: {str(e)}")
-                    st.info("If you enabled OCR, verify that Tesseract and Poppler paths are set correctly in the sidebar settings.")
+                    if not provider == "Gemini" and use_ocr:
+                        st.info("If you enabled OCR, verify that Tesseract and Poppler paths are set correctly in the sidebar settings.")
                     st.session_state["analysis_ready"] = False
                     
             if st.session_state.get("analysis_ready", False):

@@ -299,3 +299,31 @@ def generate_quiz(text, provider, api_key, model_name=None, num_questions=5):
                 "explanation": "Could not parse JSON. Check API logs."
             }
         ]
+
+def extract_text_multimodal(pdf_bytes, provider, api_key, model_name=None):
+    """
+    Extracts text from PDF bytes using Gemini's native multimodal capabilities.
+    Very useful for scanned or handwritten PDFs without requiring local Poppler/Tesseract.
+    """
+    if provider != "Gemini":
+        raise ValueError("Multimodal PDF extraction is only supported for Gemini.")
+        
+    if not model_name:
+        model_name = DEFAULT_MODELS.get(provider)
+        
+    client = genai.Client(api_key=api_key)
+    
+    prompt = (
+        "Extract all text from this PDF document. If it is handwritten, scanned, or contains diagrams with text, "
+        "perform high-quality OCR and write down all the text exactly as it appears. Output ONLY the raw extracted text, "
+        "do not add any explanations, summaries, or metadata."
+    )
+    
+    response = client.models.generate_content(
+        model=model_name,
+        contents=[
+            types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"),
+            prompt
+        ]
+    )
+    return response.text
